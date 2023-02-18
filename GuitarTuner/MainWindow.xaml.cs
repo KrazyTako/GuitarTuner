@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
@@ -17,7 +18,9 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using FftSharp;
+using FftSharp.Windows;
 using NAudio.Wave;
+using ScottPlot.Plottable;
 
 namespace GuitarTuner
 {
@@ -26,13 +29,18 @@ namespace GuitarTuner
     /// </summary>
     public partial class MainWindow : System.Windows.Window
     {
-        const int SAMPLE_RATE = 44_100;
+        //const int SAMPLE_RATE = 44_100;
+        const int SAMPLE_RATE = 48_000;
 
         const int BIT_DEPTH = 16;
 
         const int CHANNEL_COUNT = 1;
 
-        const int BUFFER_MS = 20;
+        const int BUFFER_MS = 210;
+
+        //const int BUFFER_MS = 110;
+
+        VLine peakLine;
 
         /// <summary>
         /// The audio values to be plotted
@@ -59,12 +67,14 @@ namespace GuitarTuner
             PlotGraph.Plot.XLabel("Time (milliseconds)");
             PlotGraph.Refresh();
 
-            FrequencyGraph.Plot.AddSignal(FftValues, fftPeriod);
+            var thing = 2.0 * fftMag.Length / SAMPLE_RATE;
+            FrequencyGraph.Plot.AddSignal(FftValues, thing);
             FrequencyGraph.Plot.YLabel("Spectral Power");
             FrequencyGraph.Plot.XLabel("Frequency (kHz)");
+            peakLine = FrequencyGraph.Plot.AddVerticalLine(0, ColorTranslator.FromHtml("#66FF0000"), 2);
             FrequencyGraph.Refresh();
 
-            timer.Interval = BUFFER_MS;
+            timer.Interval = 20;
             timer.Tick += Timer_Tick;
             timer.Tick += Timer_Tick_Frequency;
             timer.Start();
@@ -108,32 +118,111 @@ namespace GuitarTuner
 
         private void Timer_Tick_Frequency(object? sender, EventArgs e)
         {
-            double[] paddedAudio = FftSharp.Pad.ZeroPad(AudioValues);
-            double[] fftMag = FftSharp.Transform.FFTpower(paddedAudio);
-            Array.Copy(fftMag, FftValues, fftMag.Length);
+            var window = new Hanning();
+            double[] windowed = window.Apply(AudioValues);
+            double[] paddedAudio = Pad.ZeroPad(windowed);
+            double[] filtered = Filter.BandPass(paddedAudio, SAMPLE_RATE, 62, 1400);
+            double[] fftMag = FftSharp.Transform.FFTmagnitude(filtered);
+            //fftMag = HarmonicProductSpectrum(fftMag);
+            //fftMag = HarmonicProductSpectrum(fftMag).Select(x => x / 5.0).ToArray();
+            double[] fftFreq = FftSharp.Transform.FFTfreq(SAMPLE_RATE, fftMag.Length);
 
             // find the frequency peak
-            int peakIndex = 0;
+            double peakPower = 0;
+            double peakFrequency = 0;
+            double peakIndex = 0;
             for (int i = 0; i < fftMag.Length; i++)
             {
-                if (fftMag[i] > fftMag[peakIndex])
+                if (fftMag[i] > peakPower)
+                {
+                    peakPower = fftMag[i];
+                    peakFrequency = fftFreq[i];
                     peakIndex = i;
+                }
             }
+            Array.Copy(fftMag, FftValues, fftMag.Length);
             double fftPeriod = FftSharp.Transform.FFTfreqPeriod(SAMPLE_RATE, fftMag.Length);
-            double peakFrequency = fftPeriod * peakIndex;
-            //label1.Text = $"Peak Frequency: {peakFrequency:N0} Hz";
+            double peakFrequency2 = fftPeriod * peakIndex;
+            var thing = FindClosestNote(peakFrequency);
+            DetectedFrequencyLabel.Content = $"Peak Frequency1: {peakFrequency:N2} Hz Frequency2: {peakFrequency2:N2}";
+            NearestFrequencyLabel.Content = $"{thing.note} {thing.pitch:N1}Hz";
 
-            // auto-scale the plot Y axis limits
-            double fftPeakMag = fftMag.Max();
-            double plotYMax = FrequencyGraph.Plot.GetAxisLimits().YMax;
+            peakLine.X = peakFrequency;
             FrequencyGraph.Plot.SetAxisLimits(
                 xMin: 0,
-                xMax: 3,
-                yMin: 0,
-                yMax: Math.Max(fftPeakMag, plotYMax));
+                xMax: 1400,
+                yMin: -10,
+            //yMax: peakPower
+            yMax: Math.Max(peakPower, FrequencyGraph.Plot.GetAxisLimits().YMax)
+            );
 
             // request a redraw using a non-blocking render queue
             FrequencyGraph.RefreshRequest();
+        }
+
+        public double[] HarmonicProductSpectrum(double[] data)
+        {
+            double[] hps2 = Downsample(data, 2);
+            double[] hps3 = Downsample(data, 3);
+            double[] hps4 = Downsample(data, 4);
+            double[] hps5 = Downsample(data, 5);
+            double[] array = new double[hps5.Length];
+
+            for (int i = 0; i < array.Length; i++)
+            {
+                checked
+                {
+                    array[i] = data[i] * hps2[i] * hps3[i] * hps4[i] * hps5[i];
+                }
+            }
+            return array;
+        }
+
+        public double[] Downsample(double[] data, int n)
+        {
+            double[] array = new double[Convert.ToInt32(Math.Ceiling(data.Length * 1.0 / n))];
+            for (int i = 0; i < array.Length; i++)
+            {
+                array[i] = data[i * n];
+            }
+            return array;
+        }
+
+        //private double[] CalculateHps(double[] spectrum, int downsampleFactor = 5, int maxHarmonics = 5)
+        //{
+        //    int spectrumLength = spectrum.Length;
+        //    double[] hps = new double[spectrumLength / downsampleFactor];
+
+        //    for (int i = 0; i < hps.Length; i++)
+        //    {
+        //        hps[i] = spectrum[i * downsampleFactor];
+
+        //        for (int j = 2; j <= maxHarmonics; j++)
+        //        {
+        //            int idx = i * downsampleFactor * j;
+
+        //            if (idx >= spectrumLength) break;
+
+        //            hps[i] *= spectrum[idx];
+        //        }
+        //    }
+
+        //    return hps;
+        //}
+
+        List<string> allNotes = new List<string> { "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#" };
+        const double CONCERT_PITCH = 440d;
+        private (string note, double pitch) FindClosestNote(double pitch)
+        {
+            var rawIndex = (int)Math.Round(Math.Log2(pitch / CONCERT_PITCH) * 12);
+            var adjustedIndex = rawIndex;
+            while (adjustedIndex < 0)
+            {
+                adjustedIndex += 12;
+            }
+            var closestNote = allNotes[adjustedIndex % 12] + (4 + Math.Floor((rawIndex + 9) / 12.0)).ToString();
+            var closestPitch = CONCERT_PITCH * Math.Pow(2, rawIndex / 12.0);
+            return (closestNote, closestPitch);
         }
 
         public void WaveIn_DataAvailable2(object? sender, WaveInEventArgs e)

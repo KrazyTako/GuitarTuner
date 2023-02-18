@@ -12,9 +12,11 @@
             <ColumnDefinition Width="312*"/>
             <ColumnDefinition Width="371*"/>
         </Grid.ColumnDefinitions>
-        <WpfPlot x:Name="PlotGraph" HorizontalAlignment="Left" VerticalAlignment="Top" Height="405" Width="586" Grid.ColumnSpan="2" Margin="22,54,0,0" Grid.Column="1"/>
+        <WpfPlot x:Name="PlotGraph" HorizontalAlignment="Left" VerticalAlignment="Top" Height="320" Width="747" Grid.ColumnSpan="3" Margin="25,54,0,0"/>
         <ProgressBar x:Name="ProgressBar" HorizontalAlignment="Left" Height="10" Margin="265,39,0,0" VerticalAlignment="Top" Width="100" Grid.ColumnSpan="2" Grid.Column="1"/>
-        <WpfPlot Name="FrequencyGraph" HorizontalAlignment="Left" Margin="22,464,0,0" VerticalAlignment="Top" Grid.ColumnSpan="2" Grid.Column="1" Height="388" Width="586"/>
+        <WpfPlot Name="FrequencyGraph" HorizontalAlignment="Left" Margin="25,464,0,0" VerticalAlignment="Top" Grid.ColumnSpan="3" Height="388" Width="747"/>
+        <Label Name="DetectedFrequencyLabel" Grid.Column="1" Content="Label" HorizontalAlignment="Left" Margin="232,379,0,0" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="287"/>
+        <Label Name="NearestFrequencyLabel" Grid.Column="1" Content="Label" HorizontalAlignment="Left" Margin="232,0,0,0" VerticalAlignment="Center" Grid.ColumnSpan="2" Height="33" Width="178"/>
 
     </Grid>
 </Window>
