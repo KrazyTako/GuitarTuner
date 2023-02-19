@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="FftSharp" Version="1.1.6" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="NAudio" Version="2.1.0" />
     <PackageReference Include="ScottPlot.WPF" Version="4.1.60" />
   </ItemGroup>
