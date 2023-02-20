@@ -30,20 +30,25 @@ namespace GuitarTuner
     /// </summary>
     public partial class MainWindow : System.Windows.Window
     {
-        //const int SAMPLE_RATE = 44_100;
+        readonly string[] allNotes = { "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#" };
+
+        const double CONCERT_PITCH = 440.0;
+
         const int SAMPLE_RATE = 48_000;
+
+        const int WINDOW_SIZE = 48_000;
+
+        const int WINDOW_STEP = WINDOW_SIZE / 4;
+
+        const int WINDOW_T_LENGTH = WINDOW_SIZE / SAMPLE_RATE;
+
+        const int BUFFER_MS = 1000 * WINDOW_T_LENGTH / 4;
 
         const int BIT_DEPTH = 16;
 
         const int CHANNEL_COUNT = 1;
 
-        const int BUFFER_MS = 420;
-
         const int NUM_HPS = 5;
-
-        //const int BUFFER_MS = 110;
-
-        VLine peakLine;
 
         /// <summary>
         /// The audio values to be plotted
@@ -58,12 +63,12 @@ namespace GuitarTuner
         {
             InitializeComponent();
 
-            AudioValues = new double[SAMPLE_RATE * BUFFER_MS / 1000];
+            AudioValues = new double[SAMPLE_RATE];
             double[] paddedAudio = Pad.ZeroPad(AudioValues);
             double[] fftMag = FftSharp.Transform.FFTmagnitude(paddedAudio);
             FftValues = new double[fftMag.Length];
 
-            double fftPeriod = FftSharp.Transform.FFTfreqPeriod(SAMPLE_RATE, fftMag.Length);
+            double fftPeriod = FftSharp.Transform.FFTfreqPeriod(SAMPLE_RATE, fftMag.Length) / NUM_HPS;
 
             PlotGraph.Plot.AddSignal(AudioValues, SAMPLE_RATE / 1000);
             PlotGraph.Plot.YLabel("Level");
@@ -76,7 +81,7 @@ namespace GuitarTuner
             FrequencyGraph.Plot.XLabel("Frequency (kHz)");
             FrequencyGraph.Refresh();
 
-            timer.Interval = BUFFER_MS / 2;
+            timer.Interval = BUFFER_MS;
             timer.Tick += Timer_Tick;
             timer.Tick += Timer_Tick_Frequency;
             timer.Start();
@@ -203,8 +208,6 @@ namespace GuitarTuner
             return array;
         }
 
-        List<string> allNotes = new List<string> { "A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#" };
-        const double CONCERT_PITCH = 440d;
         private (string note, double pitch) FindClosestNote(double pitch)
         {
             var rawIndex = (int)Math.Round(Math.Log2(pitch / CONCERT_PITCH) * 12);
@@ -220,11 +223,15 @@ namespace GuitarTuner
 
         public void WaveIn_DataAvailable2(object? sender, WaveInEventArgs e)
         {
+            var windowStep = new double[WINDOW_STEP];
             for (int i = 0; i < e.Buffer.Length / 2; i++)
             {
-                AudioValues[i] = BitConverter.ToInt16(e.Buffer, i * 2);
+                windowStep[i] = BitConverter.ToInt16(e.Buffer, i * 2);
             }
+            // Shift the array by WINDOW_STEP
+            Array.Copy(AudioValues, WINDOW_STEP - 1, AudioValues, 0, WINDOW_STEP * 3);
+            // Insert the new window at the end
+            Array.Copy(windowStep, 0, AudioValues, WINDOW_STEP * 3, WINDOW_STEP);
         }
-
     }
 }
