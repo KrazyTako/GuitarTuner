@@ -68,9 +68,7 @@ namespace GuitarTuner
             double[] fftMag = FftSharp.Transform.FFTmagnitude(paddedAudio);
             FftValues = new double[fftMag.Length];
 
-            double fftPeriod = FftSharp.Transform.FFTfreqPeriod(SAMPLE_RATE, fftMag.Length) / NUM_HPS;
-
-            PlotGraph.Plot.AddSignal(AudioValues, SAMPLE_RATE / 1000);
+            PlotGraph.Plot.AddSignal(AudioValues, SAMPLE_RATE);
             PlotGraph.Plot.YLabel("Level");
             PlotGraph.Plot.XLabel("Time (milliseconds)");
             PlotGraph.Refresh();
@@ -143,7 +141,7 @@ namespace GuitarTuner
                 }
             }
             double peakPower = fftMag[peakIndex];
-            double peakFrequency = fftFreq[peakIndex] / 5.0;
+            double peakFrequency = fftFreq[peakIndex] / NUM_HPS;
             Array.Copy(fftMag, FftValues, fftMag.Length);
             var closestNote = FindClosestNote(peakFrequency);
             DetectedFrequencyLabel.Content = $"Fundamental Frequency: {peakFrequency:N2} Hz";
@@ -229,7 +227,7 @@ namespace GuitarTuner
                 windowStep[i] = BitConverter.ToInt16(e.Buffer, i * 2);
             }
             // Shift the array by WINDOW_STEP
-            Array.Copy(AudioValues, WINDOW_STEP - 1, AudioValues, 0, WINDOW_STEP * 3);
+            Array.Copy(AudioValues, WINDOW_STEP, AudioValues, 0, WINDOW_STEP * 3);
             // Insert the new window at the end
             Array.Copy(windowStep, 0, AudioValues, WINDOW_STEP * 3, WINDOW_STEP);
         }
